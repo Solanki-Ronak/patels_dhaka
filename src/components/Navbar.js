@@ -19,34 +19,39 @@ const Navbar = ({ user }) => {
 
   return (
     <nav className="navbar">
-      <div className="navbar-left">
-        <Link to="/" className="nav-brand">APP4080</Link>
-      </div>
-      
-      <div className="navbar-center">
-        <Link to="/tasks" className="nav-link">Task Management</Link>
-        <Link to="/files" className="nav-link">File Sharing</Link>
-        <Link to="/calendar" className="nav-link">Calendar</Link>
-        <Link to="/messages" className="nav-link">Messages</Link>
+      <div className="navbar-brand">
+        <Link to="/" className="brand-text">APP4080</Link>
       </div>
 
-      <div className="navbar-right">
-        <div className="user-profile" onClick={() => setShowDropdown(!showDropdown)}>
-          <div className="profile-icon">
-            {user?.displayName?.[0] || user?.email?.[0] || 'U'}
+      {user && (
+        <>
+          <div className="navbar-links">
+            <Link to="/tasks">Task Management</Link>
+            <Link to="/files">File Sharing</Link>
+            <Link to="/calendar">Calendar</Link>
+            <Link to="/messages">Messages</Link>
           </div>
-          
-          {showDropdown && (
-            <div className="profile-dropdown">
-              <div className="profile-info">
-                <p className="user-name">{user?.displayName}</p>
-                <p className="user-email">{user?.email}</p>
-              </div>
-              <button onClick={handleSignOut}>Sign Out</button>
+
+          <div className="navbar-user">
+            <div 
+              className="user-avatar" 
+              onClick={() => setShowDropdown(!showDropdown)}
+            >
+              {user.displayName?.[0] || user.email?.[0] || 'U'}
             </div>
-          )}
-        </div>
-      </div>
+            
+            {showDropdown && (
+              <div className="user-dropdown">
+                <div className="user-info">
+                  <p className="user-name">{user.displayName}</p>
+                  <p className="user-email">{user.email}</p>
+                </div>
+                <button onClick={handleSignOut}>Sign Out</button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </nav>
   );
 };

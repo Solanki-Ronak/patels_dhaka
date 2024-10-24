@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 
-
 const Dashboard = () => {
   const navigate = useNavigate();
 
@@ -10,39 +9,49 @@ const Dashboard = () => {
     {
       title: 'Task Management',
       description: 'Manage your tasks and projects',
-      path: '/tasks'
+      path: '/tasks',
+      icon: '📋'
     },
     {
       title: 'File Sharing',
       description: 'Share and manage files',
-      path: '/files'
+      path: '/files',
+      icon: '📁'
     },
     {
       title: 'Calendar',
       description: 'View and manage events',
-      path: '/calendar'
+      path: '/calendar',
+      icon: '📅'
     },
     {
       title: 'Messages',
       description: 'Chat with team members',
-      path: '/messages'
+      path: '/messages',
+      icon: '💬'
     },
     {
       title: 'Reports',
       description: 'View task analytics and reports',
-      path: '/reports'
+      path: '/reports',
+      icon: '📊'
     }
   ];
 
   return (
-    <div className="dashboard-container">
+    <div className="dashboard">
+      <div className="dashboard-header">
+        <h1>APP4080</h1>
+      </div>
+      
       <div className="dashboard-grid">
         {tiles.map((tile, index) => (
           <div 
-            key={index} 
+            key={index}
             className="dashboard-tile"
             onClick={() => navigate(tile.path)}
           >
+            <div className="tile-icon">{tile.icon}</div>
             <h2>{tile.title}</h2>
             <p>{tile.description}</p>
           </div>

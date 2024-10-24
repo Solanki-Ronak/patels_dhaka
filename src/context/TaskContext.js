@@ -4,9 +4,9 @@ import {
   query, 
   where, 
   onSnapshot, 
-  addDoc,
-  updateDoc,
-  deleteDoc,
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
   doc 
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
@@ -18,7 +18,10 @@ export const TaskProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      setLoading(false);
+      return;
+    }
 
     const tasksRef = collection(db, 'tasks');
     const q = query(tasksRef, where("userId", "==", auth.currentUser.uid));
@@ -37,6 +40,7 @@ export const TaskProvider = ({ children }) => {
   }, []);
 
   const calculateDuration = (start, end) => {
+    if (!start || !end) return 0;
     const startDate = new Date(start);
     const endDate = new Date(end);
     const diffTime = Math.abs(endDate - startDate);
@@ -44,35 +48,49 @@ export const TaskProvider = ({ children }) => {
   };
 
   const addTask = async (taskData) => {
-    const tasksRef = collection(db, 'tasks');
-    await addDoc(tasksRef, {
-      ...taskData,
-      userId: auth.currentUser.uid,
-      createdAt: new Date().toISOString()
-    });
+    try {
+      const tasksRef = collection(db, 'tasks');
+      await addDoc(tasksRef, {
+        ...taskData,
+        userId: auth.currentUser.uid,
+        createdAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error adding task:", error);
+      throw error;
+    }
   };
 
-  const updateTask = async (taskId, taskData) => {
-    const taskRef = doc(db, 'tasks', taskId);
-    await updateDoc(taskRef, taskData);
+  const updateTask = async (taskId, updatedData) => {
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      await updateDoc(taskRef, updatedData);
+    } catch (error) {
+      console.error("Error updating task:", error);
+      throw error;
+    }
   };
 
   const deleteTask = async (taskId) => {
-    const taskRef = doc(db, 'tasks', taskId);
-    await deleteDoc(taskRef);
+    try {
+      const taskRef = doc(db, 'tasks', taskId);
+      await deleteDoc(taskRef);
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      throw error;
+    }
+  };
+
+  const value = {
+    tasks,
+    loading,
+    addTask,
+    updateTask,
+    deleteTask
   };
 
   return (
-    <TaskContext.Provider 
-      value={{ 
-        tasks, 
-        loading, 
-        addTask, 
-        updateTask, 
-        deleteTask,
-        calculateDuration 
-      }}
-    >
+    <TaskContext.Provider value={value}>
       {children}
     </TaskContext.Provider>
   );

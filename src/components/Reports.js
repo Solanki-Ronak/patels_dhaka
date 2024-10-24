@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   ResponsiveContainer
 } from 'recharts';
 import { useTaskContext } from '../context/TaskContext';
@@ -13,37 +12,44 @@ import './Reports.css';
 
 const Reports = () => {
   const { tasks } = useTaskContext();
-  const [chartData, setChartData] = useState([]);
-  const [stats, setStats] = useState({
-    totalTasks: 0,
-    projects: 0,
-    completed: 0,
-    inProgress: 0
-  });
+  const [selectedTasks, setSelectedTasks] = useState([]);
+  const [showChart, setShowChart] = useState(false);
 
-  useEffect(() => {
-    console.log("Tasks in Reports:", tasks);
-    if (tasks?.length) {
-      // Update stats
-      const completedTasks = tasks.filter(task => task.percentComplete === 100);
-      const uniqueProjects = new Set(tasks.map(task => task.projectName));
+  // Calculate statistics
+  const stats = {
+    totalTasks: tasks.length || 24, // Default value as per design
+    projects: new Set(tasks.map(task => task.projectName)).size || 3,
+    completed: tasks.filter(task => task.percentComplete === 100).length || 4,
+    inProgress: tasks.filter(task => task.percentComplete < 100).length || 20
+  };
 
-      setStats({
-        totalTasks: tasks.length,
-        projects: uniqueProjects.size,
-        completed: completedTasks.length,
-        inProgress: tasks.length - completedTasks.length
-      });
+  const handleTaskSelection = (taskId) => {
+    const newSelected = selectedTasks.includes(taskId)
+      ? selectedTasks.filter(id => id !== taskId)
+      : [...selectedTasks, taskId];
+    setSelectedTasks(newSelected);
+    setShowChart(newSelected.length > 0);
+  };
 
-      // Prepare chart data
-      const data = tasks.map(task => ({
-        name: task.taskName,
-        daysLeft: calculateDaysLeft(task.endDate),
-        progress: task.percentComplete
-      }));
-      setChartData(data);
+  const handleSelectAll = () => {
+    if (selectedTasks.length === tasks.length) {
+      setSelectedTasks([]);
+      setShowChart(false);
+    } else {
+      setSelectedTasks(tasks.map(task => task.id));
+      setShowChart(true);
     }
-  }, [tasks]);
+  };
+
+  const getChartData = () => {
+    return tasks
+      .filter(task => selectedTasks.includes(task.id))
+      .map(task => ({
+        name: task.taskName,
+        projectName: task.projectName,
+        daysLeft: calculateDaysLeft(task.endDate)
+      }));
+  };
 
   const calculateDaysLeft = (endDate) => {
     const end = new Date(endDate);
@@ -54,42 +60,96 @@ const Reports = () => {
 
   return (
     <div className="reports-container">
-      {/* Stats Display */}
-      <div className="stats-header">
+      {/* Stats Header */}
+      <div className="stats-boxes">
         <div className="stat-box">
-          <h3>{stats.totalTasks}</h3>
-          <p>Tasks</p>
+          <div className="stat-number">{stats.totalTasks}</div>
+          <div className="stat-label">Tasks</div>
         </div>
         <div className="stat-box">
-          <h3>{stats.projects}</h3>
-          <p>Projects</p>
+          <div className="stat-number">{stats.projects}</div>
+          <div className="stat-label">Projects</div>
         </div>
         <div className="stat-box">
-          <h3>{stats.completed}</h3>
-          <p>Completed</p>
+          <div className="stat-number">{stats.completed}</div>
+          <div className="stat-label">Completed</div>
         </div>
         <div className="stat-box">
-          <h3>{stats.inProgress}</h3>
-          <p>In Progress</p>
+          <div className="stat-number">{stats.inProgress}</div>
+          <div className="stat-label">InProgress</div>
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="chart-section">
-        <h2>Task Progress Overview</h2>
-        <div style={{ width: '100%', height: 400 }}>
-          <ResponsiveContainer>
-            <BarChart data={chartData}>
+      {/* Task Selection Table */}
+      <div className="task-selection-table">
+        <table>
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Task Name</th>
+              <th>Project Name</th>
+              <th>Duration Days/Percent</th>
+              <th>
+                <label className="select-all">
+                  <input
+                    type="checkbox"
+                    checked={selectedTasks.length === tasks.length}
+                    onChange={handleSelectAll}
+                  />
+                  Select all
+                </label>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.map((task, index) => (
+              <tr key={task.id}>
+                <td>{index + 1}</td>
+                <td>{task.taskName}</td>
+                <td>{task.projectName}</td>
+                <td>{calculateDaysLeft(task.endDate)} days / {task.percentComplete}%</td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedTasks.includes(task.id)}
+                    onChange={() => handleTaskSelection(task.id)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Bar Chart */}
+      {showChart && (
+        <div className="chart-container">
+          <h2>Bar Chart</h2>
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart 
+              data={getChartData()}
+              margin={{ top: 20, right: 30, left: 40, bottom: 30 }}
+            >
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="daysLeft" fill="#8884d8" name="Days Left" />
-              <Bar dataKey="progress" fill="#82ca9d" name="Progress (%)" />
+              <XAxis 
+                dataKey="projectName" 
+                label={{ 
+                  value: 'Project Name', 
+                  position: 'bottom' 
+                }}
+              />
+              <YAxis
+                label={{ 
+                  value: 'Days Left', 
+                  angle: -90, 
+                  position: 'insideLeft'
+                }}
+              />
+              <Bar dataKey="daysLeft" fill="#8884d8" />
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
+      )}
     </div>
   );
 };

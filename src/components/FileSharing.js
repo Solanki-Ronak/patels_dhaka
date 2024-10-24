@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { storage, db, auth } from '../firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { collection, addDoc, query, onSnapshot, deleteDoc, doc, where } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  query, 
+  onSnapshot, 
+  deleteDoc, 
+  doc, 
+  where 
+} from 'firebase/firestore';
 import './FileSharing.css';
 
 const FileSharing = () => {
   const [files, setFiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); // Replace uploadingFile with progress
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const filesRef = collection(db, 'files');
@@ -29,52 +37,57 @@ const FileSharing = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setLoading(true);
-    setUploadProgress(0);
-    
+    setUploading(true);
+    setProgress(0);
+
     try {
       const storageRef = ref(storage, `files/${auth.currentUser.uid}/${file.name}`);
       
-      // Create upload task to track progress
+      // Upload file
       const uploadTask = uploadBytes(storageRef, file);
       
-      // Track upload progress
+      // Monitor upload progress
       uploadTask.on('state_changed', 
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress);
+          setProgress(progress);
         }
       );
 
-      // Wait for upload to complete
-      await uploadTask;
+      // Get download URL after upload completes
       const downloadURL = await getDownloadURL(storageRef);
 
+      // Save file metadata to Firestore
       await addDoc(collection(db, 'files'), {
         name: file.name,
         type: file.type,
         size: file.size,
         url: downloadURL,
         userId: auth.currentUser.uid,
-        uploadedAt: new Date().toISOString(),
+        uploadedAt: new Date().toISOString()
       });
 
-      setUploadProgress(100);
+      setProgress(100);
     } catch (error) {
-      console.error("Error uploading file: ", error);
+      console.error("Error uploading file:", error);
     } finally {
-      setLoading(false);
-      setTimeout(() => setUploadProgress(0), 1000); // Reset progress after 1 second
+      setUploading(false);
+      setTimeout(() => setProgress(0), 1000);
     }
   };
 
   const handleDelete = async (fileId, fileName) => {
-    try {
-      const storageRef = ref(storage, `files/${auth.currentUser.uid}/${fileName}`);
-      await deleteObject(storageRef);
-      await deleteDoc(doc(db, 'files', fileId));
-    } catch (error) {
-      console.error("Error deleting file: ", error);
+    if (window.confirm('Are you sure you want to delete this file?')) {
+      try {
+        // Delete from Storage
+        const storageRef = ref(storage, `files/${auth.currentUser.uid}/${fileName}`);
+        await deleteObject(storageRef);
+
+        // Delete from Firestore
+        await deleteDoc(doc(db, 'files', fileId));
+      } catch (error) {
+        console.error("Error deleting file:", error);
+      }
     }
   };
 
@@ -86,19 +99,28 @@ const FileSharing = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const getFileIcon = (type) => {
+    if (type.includes('image')) return '🖼️';
+    if (type.includes('pdf')) return '📄';
+    if (type.includes('document')) return '📝';
+    if (type.includes('spreadsheet')) return '📊';
+    return '📎';
+  };
+
   return (
     <div className="file-sharing">
       <div className="file-header">
         <h1>File Sharing</h1>
         <div className="file-actions">
-          <input
-            type="text"
-            placeholder="Search files..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-          />
-          <label className="upload-btn">
+          <div className="search-bar">
+            <input
+              type="text"
+              placeholder="Search files..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <label className="upload-button">
             Upload File
             <input
               type="file"
@@ -109,13 +131,13 @@ const FileSharing = () => {
         </div>
       </div>
 
-      {loading && (
+      {uploading && (
         <div className="upload-progress">
           <div 
             className="progress-bar" 
-            style={{ width: `${uploadProgress}%` }}
+            style={{ width: `${progress}%` }}
           >
-            {Math.round(uploadProgress)}%
+            {Math.round(progress)}%
           </div>
         </div>
       )}
@@ -128,9 +150,7 @@ const FileSharing = () => {
           .map(file => (
             <div key={file.id} className="file-card">
               <div className="file-icon">
-                {file.type.includes('image') ? '🖼️' : 
-                 file.type.includes('pdf') ? '📄' :
-                 file.type.includes('document') ? '📝' : '📎'}
+                {getFileIcon(file.type)}
               </div>
               <div className="file-info">
                 <h3>{file.name}</h3>
@@ -140,12 +160,17 @@ const FileSharing = () => {
                 </p>
               </div>
               <div className="file-actions">
-                <a href={file.url} target="_blank" rel="noopener noreferrer" className="download-btn">
+                <a 
+                  href={file.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="download-button"
+                >
                   Download
                 </a>
                 <button 
                   onClick={() => handleDelete(file.id, file.name)}
-                  className="delete-btn"
+                  className="delete-button"
                 >
                   Delete
                 </button>
@@ -153,6 +178,12 @@ const FileSharing = () => {
             </div>
           ))}
       </div>
+
+      {files.length === 0 && !uploading && (
+        <div className="no-files">
+          <p>No files uploaded yet</p>
+        </div>
+      )}
     </div>
   );
 };

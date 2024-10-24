@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -12,7 +10,8 @@ import CalendarSystem from './components/CalendarSystem';
 import MessageSystem from './components/MessageSystem';
 import TaskManagement from './components/TaskManagement';
 import FileSharing from './components/FileSharing';
-import Reports from './components/Reports'; // Updated import
+import Reports from './components/Reports';
+import ForgotPassword from './components/ForgotPassword';
 import Navbar from './components/Navbar';
 import './App.css';
 
@@ -50,6 +49,7 @@ const App = () => {
           <Routes>
             <Route path="/signup" element={!user ? <SignUp /> : <Navigate to="/" />} />
             <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+            <Route path="/forgot-password" element={!user ? <ForgotPassword /> : <Navigate to="/" />} />
             
             <Route
               path="/"
@@ -63,7 +63,7 @@ const App = () => {
                 )
               }
             />
-
+            
             <Route
               path="/tasks"
               element={
@@ -76,7 +76,46 @@ const App = () => {
                 )
               }
             />
-
+            
+            <Route
+              path="/calendar"
+              element={
+                user ? (
+                  <MainLayout user={user}>
+                    <CalendarSystem />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            
+            <Route
+              path="/messages"
+              element={
+                user ? (
+                  <MainLayout user={user}>
+                    <MessageSystem />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            
+            <Route
+              path="/files"
+              element={
+                user ? (
+                  <MainLayout user={user}>
+                    <FileSharing />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+            
             <Route
               path="/reports"
               element={
@@ -89,34 +128,6 @@ const App = () => {
                 )
               }
             />
-
-<Route
-path="/calendar"
-element={
-  <MainLayout user={user}>
-    <CalendarSystem />
-  </MainLayout>
-}
-/>
-
-<Route
-path="/messages"
-element={
-  <MainLayout user={user}>
-    <MessageSystem />
-  </MainLayout>
-}
-/>
-
-
-<Route
-path="/files"
-element={
-  <MainLayout user={user}>
-    <FileSharing />
-  </MainLayout>
-}
-/>
           </Routes>
         </div>
       </Router>

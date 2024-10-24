@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useTaskContext } from '../context/TaskContext';
+import { FaSearch } from 'react-icons/fa';
 import './TaskManagement.css';
 
 const TaskManagement = () => {
   const { tasks, addTask, updateTask, deleteTask } = useTaskContext();
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingTask, setEditingTask] = useState(null);
   const [newTask, setNewTask] = useState({
     taskName: '',
     projectName: '',
@@ -15,57 +15,45 @@ const TaskManagement = () => {
     percentComplete: 0
   });
 
+  const calculateDuration = (start, end) => {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diffTime = Math.abs(endDate - startDate);
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  const calculateDaysLeft = (endDate) => {
+    if (!endDate) return 0;
+    const end = new Date(endDate);
+    const today = new Date();
+    const diffTime = end - today;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
   const handleNewTask = async (e) => {
     e.preventDefault();
-    try {
-      await addTask(newTask);
-      setNewTask({
-        taskName: '',
-        projectName: '',
-        startDate: '',
-        endDate: '',
-        percentComplete: 0
-      });
-      setActiveTab('all');
-    } catch (error) {
-      console.error("Error adding task: ", error);
-    }
-  };
-
-  const handleEdit = (task) => {
-    setEditingTask({
-      ...task,
-      startDate: task.startDate.split('T')[0],
-      endDate: task.endDate.split('T')[0]
+    const duration = calculateDuration(newTask.startDate, newTask.endDate);
+    const taskData = {
+      ...newTask,
+      duration,
+      taskNumber: (tasks.length + 1).toString().padStart(3, '0'),
+      createdAt: new Date().toISOString()
+    };
+    await addTask(taskData);
+    setNewTask({
+      taskName: '',
+      projectName: '',
+      startDate: '',
+      endDate: '',
+      percentComplete: 0
     });
-    setActiveTab('edit');
+    setActiveTab('all');
   };
 
-  const handleEditSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await updateTask(editingTask.id, {
-        taskName: editingTask.taskName,
-        projectName: editingTask.projectName,
-        startDate: editingTask.startDate,
-        endDate: editingTask.endDate,
-        percentComplete: parseInt(editingTask.percentComplete)
-      });
-      setEditingTask(null);
-      setActiveTab('all');
-    } catch (error) {
-      console.error("Error updating task: ", error);
-    }
-  };
-
-  const handleDelete = async (taskId) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      try {
-        await deleteTask(taskId);
-      } catch (error) {
-        console.error("Error deleting task: ", error);
-      }
-    }
+  const handlePercentChange = (value) => {
+    const percent = Math.min(Math.max(0, parseInt(value) || 0), 100);
+    setNewTask({ ...newTask, percentComplete: percent });
   };
 
   return (
@@ -90,112 +78,107 @@ const TaskManagement = () => {
 
       {activeTab === 'new' && (
         <div className="new-task-form">
-          <h2>Create New Task</h2>
+          <h2>Enter the following details:</h2>
           <form onSubmit={handleNewTask}>
-            <input
-              type="text"
-              placeholder="Task Name"
-              value={newTask.taskName}
-              onChange={(e) => setNewTask({...newTask, taskName: e.target.value})}
-              required
-            />
-            <input
-              type="text"
-              placeholder="Project Name"
-              value={newTask.projectName}
-              onChange={(e) => setNewTask({...newTask, projectName: e.target.value})}
-              required
-            />
-            <div className="date-inputs">
+            <div className="form-row">
+              <label>No:</label>
               <input
-                type="date"
-                value={newTask.startDate}
-                onChange={(e) => setNewTask({...newTask, startDate: e.target.value})}
-                required
+                type="text"
+                value={(tasks.length + 1).toString().padStart(3, '0')}
+                disabled
               />
+              <span className="hint">should be automatic</span>
+            </div>
+            
+            <div className="form-row">
+              <label>Task Name:</label>
               <input
-                type="date"
-                value={newTask.endDate}
-                onChange={(e) => setNewTask({...newTask, endDate: e.target.value})}
+                type="text"
+                value={newTask.taskName}
+                onChange={(e) => setNewTask({...newTask, taskName: e.target.value})}
                 required
               />
             </div>
-            <input
-              type="number"
-              placeholder="Percentage Complete (0-100)"
-              min="0"
-              max="100"
-              value={newTask.percentComplete}
-              onChange={(e) => setNewTask({...newTask, percentComplete: parseInt(e.target.value)})}
-              required
-            />
-            <button type="submit">Add Task</button>
-          </form>
-        </div>
-      )}
 
-      {activeTab === 'edit' && editingTask && (
-        <div className="edit-task-form">
-          <h2>Edit Task</h2>
-          <form onSubmit={handleEditSubmit}>
-            <input
-              type="text"
-              placeholder="Task Name"
-              value={editingTask.taskName}
-              onChange={(e) => setEditingTask({...editingTask, taskName: e.target.value})}
-              required
-            />
-            <input
-              type="text"
-              placeholder="Project Name"
-              value={editingTask.projectName}
-              onChange={(e) => setEditingTask({...editingTask, projectName: e.target.value})}
-              required
-            />
-            <div className="date-inputs">
+            <div className="form-row">
+              <label>Project Name:</label>
               <input
-                type="date"
-                value={editingTask.startDate}
-                onChange={(e) => setEditingTask({...editingTask, startDate: e.target.value})}
-                required
-              />
-              <input
-                type="date"
-                value={editingTask.endDate}
-                onChange={(e) => setEditingTask({...editingTask, endDate: e.target.value})}
+                type="text"
+                value={newTask.projectName}
+                onChange={(e) => setNewTask({...newTask, projectName: e.target.value})}
                 required
               />
             </div>
-            <input
-              type="number"
-              placeholder="Percentage Complete (0-100)"
-              min="0"
-              max="100"
-              value={editingTask.percentComplete}
-              onChange={(e) => setEditingTask({...editingTask, percentComplete: parseInt(e.target.value)})}
-              required
-            />
-            <div className="form-buttons">
-              <button type="submit">Save Changes</button>
-              <button type="button" onClick={() => {
-                setEditingTask(null);
-                setActiveTab('all');
-              }}>Cancel</button>
+
+            <div className="form-row">
+              <label>Start Date:</label>
+              <div className="date-input">
+                <input
+                  type="date"
+                  value={newTask.startDate}
+                  onChange={(e) => setNewTask({...newTask, startDate: e.target.value})}
+                  required
+                />
+                <span className="calendar-icon">📅</span>
+              </div>
             </div>
+
+            <div className="form-row">
+              <label>End Date:</label>
+              <div className="date-input">
+                <input
+                  type="date"
+                  value={newTask.endDate}
+                  onChange={(e) => setNewTask({...newTask, endDate: e.target.value})}
+                  required
+                />
+                <span className="calendar-icon">📅</span>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <label>Duration:</label>
+              <input
+                type="text"
+                value={calculateDuration(newTask.startDate, newTask.endDate)}
+                disabled
+              />
+              <span className="hint">should automatic calculate days by taking End - Start</span>
+            </div>
+
+            <div className="form-row">
+              <label>Percentage Complete:</label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={newTask.percentComplete}
+                onChange={(e) => handlePercentChange(e.target.value)}
+                required
+              />
+              <span className="hint">restrict to 0-100 (should be within)</span>
+            </div>
+
+            <button type="submit" className="add-button">Add</button>
           </form>
         </div>
       )}
 
       {activeTab === 'all' && (
         <div className="all-tasks">
-          <div className="search-bar">
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="search-section">
+            <div className="search-bar">
+              <FaSearch className="search-icon" />
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <button className="search-button">Search</button>
           </div>
+
           <table className="tasks-table">
             <thead>
               <tr>
@@ -204,8 +187,9 @@ const TaskManagement = () => {
                 <th>Project Name</th>
                 <th>Start Date</th>
                 <th>Due Date</th>
-                <th>Duration</th>
-                <th>Progress</th>
+                <th>Total Duration</th>
+                <th>Days Left</th>
+                <th>Percent</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -223,10 +207,11 @@ const TaskManagement = () => {
                     <td>{new Date(task.startDate).toLocaleDateString()}</td>
                     <td>{new Date(task.endDate).toLocaleDateString()}</td>
                     <td>{task.duration} days</td>
+                    <td>{calculateDaysLeft(task.endDate)} days</td>
                     <td>{task.percentComplete}%</td>
                     <td>
-                      <button onClick={() => handleEdit(task)}>Edit</button>
-                      <button onClick={() => handleDelete(task.id)}>Delete</button>
+                      <button className="edit-button" onClick={() => updateTask(task.id)}>Edit</button>
+                      <button className="delete-button" onClick={() => deleteTask(task.id)}>Delete</button>
                     </td>
                   </tr>
                 ))}
