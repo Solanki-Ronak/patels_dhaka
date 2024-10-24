@@ -1,18 +1,35 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
+import { TaskProvider } from './context/TaskContext';
 import SignUp from './components/SignUp';
 import Login from './components/Login';
+import Dashboard from './components/Dashboard';
 import CalendarSystem from './components/CalendarSystem';
 import MessageSystem from './components/MessageSystem';
-import UserProfile from './components/UserProfile';
+import TaskManagement from './components/TaskManagement';
+import FileSharing from './components/FileSharing';
+import Reports from './components/Reports'; // Updated import
+import Navbar from './components/Navbar';
 import './App.css';
+
+const MainLayout = ({ children, user }) => {
+  return (
+    <div className="main-layout">
+      <Navbar user={user} />
+      <main className="main-content">
+        {children}
+      </main>
+    </div>
+  );
+};
 
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeSystem, setActiveSystem] = useState('calendar');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -27,38 +44,83 @@ const App = () => {
   }
 
   return (
-    <Router>
-      <div className="app">
-        <nav>
-          <div className="app-name">Patel's Tadka</div>
-          {user && (
-            <UserProfile 
-              user={user} 
-              onSystemChange={setActiveSystem} 
-              activeSystem={activeSystem}
-            />
-          )}
-        </nav>
-        <Routes>
-          <Route path="/signup" element={<SignUp />} />
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              user ? (
-                activeSystem === 'calendar' ? (
-                  <CalendarSystem />
+    <TaskProvider>
+      <Router>
+        <div className="app">
+          <Routes>
+            <Route path="/signup" element={!user ? <SignUp /> : <Navigate to="/" />} />
+            <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+            
+            <Route
+              path="/"
+              element={
+                user ? (
+                  <MainLayout user={user}>
+                    <Dashboard />
+                  </MainLayout>
                 ) : (
-                  <MessageSystem />
+                  <Navigate to="/login" />
                 )
-              ) : (
-                <Navigate to="/login" />
-              )
-            }
-          />
-        </Routes>
-      </div>
-    </Router>
+              }
+            />
+
+            <Route
+              path="/tasks"
+              element={
+                user ? (
+                  <MainLayout user={user}>
+                    <TaskManagement />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+
+            <Route
+              path="/reports"
+              element={
+                user ? (
+                  <MainLayout user={user}>
+                    <Reports />
+                  </MainLayout>
+                ) : (
+                  <Navigate to="/login" />
+                )
+              }
+            />
+
+<Route
+path="/calendar"
+element={
+  <MainLayout user={user}>
+    <CalendarSystem />
+  </MainLayout>
+}
+/>
+
+<Route
+path="/messages"
+element={
+  <MainLayout user={user}>
+    <MessageSystem />
+  </MainLayout>
+}
+/>
+
+
+<Route
+path="/files"
+element={
+  <MainLayout user={user}>
+    <FileSharing />
+  </MainLayout>
+}
+/>
+          </Routes>
+        </div>
+      </Router>
+    </TaskProvider>
   );
 };
 

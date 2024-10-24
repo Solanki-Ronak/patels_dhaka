@@ -358,3 +358,29 @@ nav {
 * {
   border-bottom-color: transparent !important;
 }
+
+.app {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.main-layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  background-color: #f5f7fa;
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  font-size: 1.2rem;
+  color: #666;
+}
