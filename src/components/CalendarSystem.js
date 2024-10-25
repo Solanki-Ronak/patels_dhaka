@@ -1,388 +1,301 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
-import format from 'date-fns/format';
-import parse from 'date-fns/parse';
-import startOfWeek from 'date-fns/startOfWeek';
-import getDay from 'date-fns/getDay';
-import endOfWeek from 'date-fns/endOfWeek';
-import isWithinInterval from 'date-fns/isWithinInterval';
-import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { db, auth } from '../firebase';
-import { collection, addDoc, query, onSnapshot, deleteDoc, doc, updateDoc, where } from 'firebase/firestore';
-import { onAuthStateChanged } from "firebase/auth";
+import React, { useState } from 'react';
+import { useTaskContext } from '../context/TaskContext';
 import './CalendarSystem.css';
 
-const locales = {
-  'en-US': require('date-fns/locale/en-US')
-};
-
-const localizer = dateFnsLocalizer({
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-  locales,
-});
-
-const categories = [
-  { name: 'Work', color: '#4CAF50' },
-  { name: 'Personal', color: '#2196F3' },
-  { name: 'Important', color: '#F44336' },
-  { name: 'Other', color: '#FFC107' }
-];
-
 const CalendarSystem = () => {
-  const [user, setUser] = useState(null);
-  const [events, setEvents] = useState([]);
-  const [newEvent, setNewEvent] = useState({ 
-    title: '', 
-    date: '', 
-    startTime: '', 
-    endTime: '', 
-    category: '', 
-    completed: false 
-  });
+  const { tasks, addTask } = useTaskContext();
+  const [showAddEvent, setShowAddEvent] = useState(false);
+  const [showEventDetails, setShowEventDetails] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedEvent, setEditedEvent] = useState(null);
-  const [view, setView] = useState(Views.MONTH);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [newEvent, setNewEvent] = useState({
+    taskName: '',
+    projectName: '',
+    startDate: '',
+    endDate: '',
+    description: '',
+    priority: 'medium'
+  });
+  
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+    'July', 'August', 'September', 'October', 'November', 'December'];
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
+  const priorities = [
+    { value: 'low', label: 'Low Priority' },
+    { value: 'medium', label: 'Medium Priority' },
+    { value: 'high', label: 'High Priority' }
+  ];
 
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      const q = query(collection(db, 'events'), where("userId", "==", user.uid));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedEvents = snapshot.docs.map(doc => {
-          const data = doc.data();
-          const start = new Date(`${data.date}T${data.startTime}`);
-          const end = new Date(`${data.date}T${data.endTime}`);
-          return {
-            id: doc.id,
-            ...data,
-            start,
-            end,
-          };
-        });
-        setEvents(fetchedEvents);
-      });
-
-      return () => unsubscribe();
-    } else {
-      setEvents([]);
-    }
-  }, [user]);
-
-  const addEvent = async (e) => {
-    e.preventDefault();
-    if (!user) return;
-    if (newEvent.title.trim() === '' || !newEvent.date || !newEvent.startTime || !newEvent.endTime || !newEvent.category) return;
-
-    const start = new Date(`${newEvent.date}T${newEvent.startTime}`);
-    const end = new Date(`${newEvent.date}T${newEvent.endTime}`);
-
-    const isOverlapping = events.some(event => 
-      isWithinInterval(start, { start: event.start, end: event.end }) ||
-      isWithinInterval(end, { start: event.start, end: event.end }) ||
-      (start <= event.start && end >= event.end)
-    );
-
-    if (isOverlapping) {
-      alert("This time slot is already occupied. Please choose a different time.");
-      return;
-    }
-
-    try {
-      await addDoc(collection(db, 'events'), {...newEvent, userId: user.uid});
-      setNewEvent({ title: '', date: '', startTime: '', endTime: '', category: '', completed: false });
-    } catch (error) {
-      console.error("Error adding event: ", error);
-    }
+  const handleEventClick = (task) => {
+    setSelectedEvent(task);
+    setShowEventDetails(true);
   };
 
-  const deleteEvent = async (eventId) => {
-    if (!user) return;
-    try {
-      await deleteDoc(doc(db, 'events', eventId));
-      setIsModalOpen(false);
-    } catch (error) {
-      console.error("Error deleting event: ", error);
-    }
-  };
-
-  const toggleCompletion = async (event) => {
-    if (!user) return;
-    try {
-      await updateDoc(doc(db, 'events', event.id), {
-        completed: !event.completed
-      });
-    } catch (error) {
-      console.error("Error toggling completion status: ", error);
-    }
-  };
-
-  const onSelectEvent = (event) => {
-    setSelectedEvent(event);
-    setIsModalOpen(true);
-    setIsEditing(false);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setSelectedEvent(null);
-    setIsEditing(false);
-    setEditedEvent(null);
-  };
-
-  const startEditing = () => {
-    setIsEditing(true);
-    setEditedEvent({
-      ...selectedEvent,
-      date: format(selectedEvent.start, 'yyyy-MM-dd'),
-      startTime: format(selectedEvent.start, 'HH:mm'),
-      endTime: format(selectedEvent.end, 'HH:mm'),
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
     });
   };
 
-  const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditedEvent(prev => ({ ...prev, [name]: value }));
+  const goToNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
-  const saveEdit = async () => {
-    if (!user || !editedEvent) return;
-
-    const start = new Date(`${editedEvent.date}T${editedEvent.startTime}`);
-    const end = new Date(`${editedEvent.date}T${editedEvent.endTime}`);
-
-    const isOverlapping = events.some(event => 
-      event.id !== editedEvent.id && (
-        isWithinInterval(start, { start: event.start, end: event.end }) ||
-        isWithinInterval(end, { start: event.start, end: event.end }) ||
-        (start <= event.start && end >= event.end)
-      )
-    );
-
-    if (isOverlapping) {
-      alert("This time slot is already occupied. Please choose a different time.");
-      return;
-    }
-
-    try {
-      await updateDoc(doc(db, 'events', editedEvent.id), {
-        title: editedEvent.title,
-        date: editedEvent.date,
-        startTime: editedEvent.startTime,
-        endTime: editedEvent.endTime,
-        category: editedEvent.category,
-        completed: editedEvent.completed,
-      });
-      setIsEditing(false);
-      setSelectedEvent(editedEvent);
-    } catch (error) {
-      console.error("Error updating event: ", error);
-    }
+  const goToPrevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   };
 
-  const handleNavigate = (newDate) => {
-    setCurrentDate(newDate);
+  const goToToday = () => {
+    setCurrentDate(new Date());
   };
 
-  const CustomToolbar = (toolbar) => {
-    const goToToday = () => {
-      toolbar.onNavigate('TODAY');
-    };
+  const isToday = (date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
 
-    const goToBack = () => {
-      toolbar.onNavigate('PREV');
-    };
+  const getTaskCountForDay = (date, tasksForDay) => {
+    return tasksForDay.length > 0 ? (
+      <span className="task-count">{tasksForDay.length} task{tasksForDay.length > 1 ? 's' : ''}</span>
+    ) : null;
+  };
 
-    const goToNext = () => {
-      toolbar.onNavigate('NEXT');
-    };
+  const generateCalendarDays = () => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    const totalDays = lastDay.getDate();
+    const startingDay = firstDay.getDay();
 
-    const goToView = (view) => {
-      toolbar.onView(view);
-    };
-
-    const label = () => {
-      const date = toolbar.date;
-      if (toolbar.view === 'month') {
-        return format(date, 'MMMM yyyy');
-      }
-      if (toolbar.view === 'week') {
-        return `${format(startOfWeek(date), 'MMM d, yyyy')} - ${format(endOfWeek(date), 'MMM d, yyyy')}`;
-      }
-      if (toolbar.view === 'day') {
-        return format(date, 'MMMM d, yyyy');
-      }
-    };
-
-    return (
-      <div className="rbc-toolbar">
-        <span className="rbc-btn-group">
-          <button type="button" onClick={goToToday}>Today</button>
-          <button type="button" onClick={goToBack}>Back</button>
-          <button type="button" onClick={goToNext}>Next</button>
-        </span>
-        <span className="rbc-toolbar-label">{label()}</span>
-        <span className="rbc-btn-group">
-          <button type="button" onClick={() => goToView('month')}>Month</button>
-          <button type="button" onClick={() => goToView('week')}>Week</button>
-          <button type="button" onClick={() => goToView('day')}>Day</button>
-        </span>
+    let calendar = [];
+    
+    // Add header row
+    calendar.push(
+      <div key="header" className="calendar-row header">
+        {days.map(day => (
+          <div key={day} className="calendar-cell header">
+            {day.slice(0,1)}
+          </div>
+        ))}
       </div>
     );
+
+    // Add date cells
+    let cells = [];
+    for (let i = 0; i < startingDay; i++) {
+      cells.push(<div key={`empty-${i}`} className="calendar-cell empty"></div>);
+    }
+    
+    for (let day = 1; day <= totalDays; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const tasksForDay = tasks.filter(task => 
+        new Date(task.startDate).toDateString() === date.toDateString()
+      );
+
+      cells.push(
+        <div key={day} className={`calendar-cell ${isToday(date) ? 'today' : ''}`}>
+          {getTaskCountForDay(date, tasksForDay)}
+          <span className="date-number">{day}</span>
+          <div className="task-container">
+            {tasksForDay.map(task => (
+              <div 
+                key={task.id} 
+                className={`task-item ${task.percentComplete === 100 ? 'completed' : ''}`}
+                onClick={() => handleEventClick(task)}
+              >
+                {task.taskName}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    while (cells.length % 7 !== 0) {
+      cells.push(<div key={`empty-end-${cells.length}`} className="calendar-cell empty"></div>);
+    }
+
+    let rows = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      rows.push(
+        <div key={`row-${i}`} className="calendar-row">
+          {cells.slice(i, i + 7)}
+        </div>
+      );
+    }
+
+    calendar.push(...rows);
+    return calendar;
   };
 
-  const eventPropGetter = useCallback((event) => {
-    const style = {
-      backgroundColor: categories.find(cat => cat.name === event.category)?.color,
-      opacity: event.completed ? 0.5 : 1,
-      textDecoration: event.completed ? 'line-through' : 'none',
-    };
-    return { style };
-  }, []);
+  const handleAddEvent = async (e) => {
+    e.preventDefault();
+    try {
+      await addTask({
+        ...newEvent,
+        percentComplete: 0
+      });
+      setNewEvent({
+        taskName: '',
+        projectName: '',
+        startDate: '',
+        endDate: '',
+        description: '',
+        priority: 'medium'
+      });
+      setShowAddEvent(false);
+    } catch (error) {
+      console.error("Error adding event:", error);
+    }
+  };
 
   return (
     <div className="calendar-system">
-      <div className="calendar-container">
-        <div className="sidebar">
-          <div className="add-event-section">
-            <h2>Add a Task</h2>
-            <form onSubmit={addEvent}>
-              <input
-                type="text"
-                value={newEvent.title}
-                onChange={(e) => setNewEvent({...newEvent, title: e.target.value})}
-                placeholder="Task title"
-              />
-              <input
-                type="date"
-                value={newEvent.date}
-                onChange={(e) => setNewEvent({...newEvent, date: e.target.value})}
-              />
-              <div className="time-inputs">
+      <div className="calendar-header">
+        <div className="calendar-nav">
+          <button className="nav-button" onClick={goToPrevMonth}>
+            ← Previous
+          </button>
+          <button className="nav-button today-button" onClick={goToToday}>
+            Today
+          </button>
+          <button className="nav-button" onClick={goToNextMonth}>
+            Next →
+          </button>
+        </div>
+        <div className="calendar-title">
+          <h2>{months[currentDate.getMonth()]} {currentDate.getFullYear()}</h2>
+        </div>
+        <button className="add-event-button" onClick={() => setShowAddEvent(true)}>
+          + Add Event
+        </button>
+      </div>
+      <div className="calendar-grid">
+        {generateCalendarDays()}
+      </div>
+
+      {/* Add Event Modal */}
+      {showAddEvent && (
+        <div className="modal-overlay">
+          <div className="event-modal">
+            <h3>Add New Event</h3>
+            <form onSubmit={handleAddEvent}>
+              <div className="form-group">
+                <label>Event Title</label>
                 <input
-                  type="time"
-                  value={newEvent.startTime}
-                  onChange={(e) => setNewEvent({...newEvent, startTime: e.target.value})}
-                />
-                <span>to</span>
-                <input
-                  type="time"
-                  value={newEvent.endTime}
-                  onChange={(e) => setNewEvent({...newEvent, endTime: e.target.value})}
+                  type="text"
+                  value={newEvent.taskName}
+                  onChange={(e) => setNewEvent({...newEvent, taskName: e.target.value})}
+                  required
+                  placeholder="Enter event title"
                 />
               </div>
-              <select
-                value={newEvent.category}
-                onChange={(e) => setNewEvent({...newEvent, category: e.target.value})}
-              >
-                <option value="">Select category</option>
-                {categories.map(cat => (
-                  <option key={cat.name} value={cat.name}>{cat.name}</option>
-                ))}
-              </select>
-              <button type="submit">Add Task</button>
+              <div className="form-group">
+                <label>Project Name</label>
+                <input
+                  type="text"
+                  value={newEvent.projectName}
+                  onChange={(e) => setNewEvent({...newEvent, projectName: e.target.value})}
+                  required
+                  placeholder="Enter project name"
+                />
+              </div>
+              <div className="form-group">
+                <label>Priority</label>
+                <select
+                  value={newEvent.priority}
+                  onChange={(e) => setNewEvent({...newEvent, priority: e.target.value})}
+                  required
+                >
+                  {priorities.map(priority => (
+                    <option key={priority.value} value={priority.value}>
+                      {priority.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  value={newEvent.description}
+                  onChange={(e) => setNewEvent({...newEvent, description: e.target.value})}
+                  rows="3"
+                  placeholder="Enter event description"
+                />
+              </div>
+              <div className="form-group">
+                <label>Start Date</label>
+                <input
+                  type="date"
+                  value={newEvent.startDate}
+                  onChange={(e) => setNewEvent({...newEvent, startDate: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>End Date</label>
+                <input
+                  type="date"
+                  value={newEvent.endDate}
+                  onChange={(e) => setNewEvent({...newEvent, endDate: e.target.value})}
+                  required
+                />
+              </div>
+              <div className="modal-buttons">
+                <button type="submit">Add Event</button>
+                <button type="button" onClick={() => setShowAddEvent(false)}>Cancel</button>
+              </div>
             </form>
           </div>
         </div>
-        <div className="main-calendar">
-          <Calendar
-            localizer={localizer}
-            events={events}
-            startAccessor="start"
-            endAccessor="end"
-            style={{ height: 'calc(100vh - 80px)' }}
-            onSelectEvent={onSelectEvent}
-            view={view}
-            onView={setView}
-            eventPropGetter={eventPropGetter}
-            defaultView={Views.MONTH}
-            date={currentDate}
-            onNavigate={handleNavigate}
-            components={{
-              toolbar: CustomToolbar
-            }}
-            views={['month', 'week', 'day']}
-          />
-        </div>
-      </div>
-      {isModalOpen && selectedEvent && (
-        <div className="modal">
-          <div className="modal-content">
-            <h3>{selectedEvent.title}</h3>
-            <p>Date: {format(selectedEvent.start, 'MMMM d, yyyy')}</p>
-            <p>Time: {format(selectedEvent.start, 'h:mm a')} - {format(selectedEvent.end, 'h:mm a')}</p>
-            <p>Category: {selectedEvent.category}</p>
-            <p>Status: {selectedEvent.completed ? 'Completed' : 'Pending'}</p>
-            <button onClick={() => toggleCompletion(selectedEvent)}>
-              {selectedEvent.completed ? 'Mark as Pending' : 'Mark as Completed'}
-            </button>
-            <button onClick={startEditing}>Edit Task</button>
-            <button onClick={() => deleteEvent(selectedEvent.id)}>Delete Task</button>
-            <button onClick={closeModal}>Close</button>
-          </div>
-        </div>
       )}
-      {isEditing && (
-        <div className="modal">
-          <div className="modal-content">
-            <h3>Edit Task</h3>
-            <input
-              type="text"
-              name="title"
-              value={editedEvent.title}
-              onChange={handleEditChange}
-              placeholder="Task title"
-            />
-            <input
-              type="date"
-              name="date"
-              value={editedEvent.date}
-              onChange={handleEditChange}
-            />
-            <input
-              type="time"
-              name="startTime"
-              value={editedEvent.startTime}
-              onChange={handleEditChange}
-            />
-            <input
-              type="time"
-              name="endTime"
-              value={editedEvent.endTime}
-              onChange={handleEditChange}
-            />
-            <select
-              name="category"
-              value={editedEvent.category}
-              onChange={handleEditChange}
-            >
-              {categories.map(cat => (
-                <option key={cat.name} value={cat.name}>{cat.name}</option>
-              ))}
-            </select>
-            <label>
-              <input
-                type="checkbox"
-                name="completed"
-                checked={editedEvent.completed}
-                onChange={(e) => setEditedEvent(prev => ({ ...prev, completed: e.target.checked }))}
-              />
-              Completed
-            </label>
-            <button onClick={saveEdit}>Save Changes</button>
-            <button onClick={() => setIsEditing(false)}>Cancel</button>
+
+      {/* Event Details Modal */}
+      {showEventDetails && selectedEvent && (
+        <div className="modal-overlay">
+          <div className="event-modal">
+            <div className="event-details">
+              <h3>
+                {selectedEvent.taskName}
+                <span className={`task-badge ${selectedEvent.percentComplete === 100 ? 'completed' : 'pending'}`}>
+                  {selectedEvent.percentComplete === 100 ? 'Completed' : 'Pending'}
+                </span>
+              </h3>
+              <div className="detail-item">
+                <strong>Project</strong>
+                {selectedEvent.projectName}
+              </div>
+              <div className="detail-item">
+                <strong>Priority</strong>
+                {selectedEvent.priority || 'Not set'}
+              </div>
+              <div className="detail-item">
+                <strong>Start Date</strong>
+                {formatDate(selectedEvent.startDate)}
+              </div>
+              <div className="detail-item">
+                <strong>End Date</strong>
+                {formatDate(selectedEvent.endDate)}
+              </div>
+              {selectedEvent.description && (
+                <div className="detail-item">
+                  <strong>Description</strong>
+                  <p>{selectedEvent.description}</p>
+                </div>
+              )}
+              <div className="detail-item">
+                <strong>Progress</strong>
+                {selectedEvent.percentComplete}%
+              </div>
+              <div className="modal-buttons">
+                <button onClick={() => setShowEventDetails(false)}>Close</button>
+              </div>
+            </div>
           </div>
         </div>
       )}

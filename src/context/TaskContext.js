@@ -30,7 +30,11 @@ export const TaskProvider = ({ children }) => {
       const taskList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        duration: calculateDuration(doc.data().startDate, doc.data().endDate)
+        duration: calculateDuration(doc.data().startDate, doc.data().endDate),
+        // Add calendar event properties
+        start: new Date(doc.data().startDate),
+        end: new Date(doc.data().endDate),
+        title: doc.data().taskName
       }));
       setTasks(taskList);
       setLoading(false);
@@ -86,7 +90,8 @@ export const TaskProvider = ({ children }) => {
     loading,
     addTask,
     updateTask,
-    deleteTask
+    deleteTask,
+    calculateDuration
   };
 
   return (

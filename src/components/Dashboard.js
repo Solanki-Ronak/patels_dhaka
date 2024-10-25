@@ -13,12 +13,6 @@ const Dashboard = () => {
       icon: '📋'
     },
     {
-      title: 'File Sharing',
-      description: 'Share and manage files',
-      path: '/files',
-      icon: '📁'
-    },
-    {
       title: 'Calendar',
       description: 'View and manage events',
       path: '/calendar',
@@ -31,17 +25,22 @@ const Dashboard = () => {
       icon: '💬'
     },
     {
-      title: 'Reports',
-      description: 'View task analytics and reports',
-      path: '/reports',
+      title: 'Analytics',
+      description: 'View task analytics and metrics',
+      path: '/analytics',
       icon: '📊'
+    },
+    {
+      title: 'Reports',
+      description: 'View task reports',
+      path: '/reports',
+      icon: '📈'
     }
   ];
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
-        <h1>APP4080</h1>
       </div>
       
       <div className="dashboard-grid">

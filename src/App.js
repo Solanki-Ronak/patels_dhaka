@@ -9,7 +9,7 @@ import Dashboard from './components/Dashboard';
 import CalendarSystem from './components/CalendarSystem';
 import MessageSystem from './components/MessageSystem';
 import TaskManagement from './components/TaskManagement';
-import FileSharing from './components/FileSharing';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import Reports from './components/Reports';
 import ForgotPassword from './components/ForgotPassword';
 import Navbar from './components/Navbar';
@@ -101,21 +101,7 @@ const App = () => {
                   <Navigate to="/login" />
                 )
               }
-            />
-            
-            <Route
-              path="/files"
-              element={
-                user ? (
-                  <MainLayout user={user}>
-                    <FileSharing />
-                  </MainLayout>
-                ) : (
-                  <Navigate to="/login" />
-                )
-              }
-            />
-            
+            /> 
             <Route
               path="/reports"
               element={
@@ -126,8 +112,20 @@ const App = () => {
                 ) : (
                   <Navigate to="/login" />
                 )
-              }
+              }  
             />
+            <Route
+  path="/analytics"
+  element={
+    user ? (
+      <MainLayout user={user}>
+        <AnalyticsDashboard />
+      </MainLayout>
+    ) : (
+      <Navigate to="/login" />
+    )
+  }
+/>
           </Routes>
         </div>
       </Router>

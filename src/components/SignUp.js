@@ -62,8 +62,7 @@ const SignUp = () => {
 
   return (
     <div className="auth-container">
-      <h2>User Authentication</h2>
-      <h3>Sign up page</h3>
+      <h2>Join Patel's Tadka</h2>
       {error && <p className="auth-error">{error}</p>}
       <form onSubmit={handleSignUp}>
         <input

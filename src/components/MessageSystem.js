@@ -1,11 +1,9 @@
-// src/components/MessageSystem.js
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { db, auth, storage } from '../firebase';
+import React, { useState, useEffect, useRef } from 'react';
+import { db, auth } from '../firebase';
 import { 
   collection, query, onSnapshot, addDoc, orderBy, 
-  serverTimestamp, getDocs, updateDoc, doc, deleteDoc, setDoc,
+  serverTimestamp, getDocs, updateDoc, doc, deleteDoc, setDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import EmojiPicker from 'emoji-picker-react';
 import { Editor, EditorState, RichUtils, convertToRaw, convertFromRaw, Modifier } from 'draft-js';
 import 'draft-js/dist/Draft.css';
@@ -17,18 +15,15 @@ const MessageSystem = () => {
   const [editorState, setEditorState] = useState(EditorState.createEmpty());
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [file, setFile] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredMessages, setFilteredMessages] = useState([]);
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
+
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const editorRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -54,12 +49,18 @@ const MessageSystem = () => {
     
     const currentUserId = auth.currentUser?.uid;
     if (currentUserId) {
-      updateDoc(doc(db, 'users', currentUserId), { online: true });
+      updateDoc(doc(db, 'users', currentUserId), { 
+        online: true,
+        lastSeen: serverTimestamp()
+      });
     }
 
     return () => {
       if (currentUserId) {
-        updateDoc(doc(db, 'users', currentUserId), { online: false });
+        updateDoc(doc(db, 'users', currentUserId), { 
+          online: false,
+          lastSeen: serverTimestamp()
+        });
       }
     };
   }, []);
@@ -68,19 +69,21 @@ const MessageSystem = () => {
     if (selectedUser) {
       const chatId = [auth.currentUser.uid, selectedUser.id].sort().join('_');
       const messagesRef = collection(db, 'chats', chatId, 'messages');
-      const q = query(messagesRef, orderBy('timestamp'));
+      const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const fetchedMessages = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
+          timestamp: doc.data().timestamp?.toDate()
         }));
         setMessages(fetchedMessages);
         setFilteredMessages(fetchedMessages);
 
-        fetchedMessages.forEach(msg => {
+        fetchedMessages.forEach(async (msg) => {
           if (msg.sender !== auth.currentUser.uid && msg.status !== 'read') {
-            updateDoc(doc(messagesRef, msg.id), { status: 'read' });
+            const messageRef = doc(messagesRef, msg.id);
+            await updateDoc(messageRef, { status: 'read' });
           }
         });
       });
@@ -128,48 +131,28 @@ const MessageSystem = () => {
 
   const sendMessage = async () => {
     const contentState = editorState.getCurrentContent();
-    const rawContent = convertToRaw(contentState);
-    const messageText = rawContent.blocks[0].text.trim();
+    if (!contentState.hasText() || !selectedUser) return;
 
-    if ((messageText || file || audioURL) && selectedUser) {
+    try {
       const chatId = [auth.currentUser.uid, selectedUser.id].sort().join('_');
       const messagesRef = collection(db, 'chats', chatId, 'messages');
-      
-      let imageUrl = '';
-      if (file) {
-        const storageRef = ref(storage, `chat_images/${Date.now()}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        imageUrl = await getDownloadURL(storageRef);
-      }
-
-      let audioFileURL = '';
-      if (audioURL) {
-        const audioBlob = await fetch(audioURL).then(r => r.blob());
-        const storageRef = ref(storage, `voice_messages/${Date.now()}_audio.webm`);
-        await uploadBytes(storageRef, audioBlob);
-        audioFileURL = await getDownloadURL(storageRef);
-      }
 
       const messageData = {
-        text: messageText ? JSON.stringify(rawContent) : '',
+        text: JSON.stringify(convertToRaw(contentState)),
         sender: auth.currentUser.uid,
         timestamp: serverTimestamp(),
         status: 'sent',
-        image: imageUrl,
-        audio: audioFileURL,
         reactions: {},
         replyTo: replyingTo ? replyingTo.id : null
       };
 
-      const docRef = await addDoc(messagesRef, messageData);
-      await updateDoc(docRef, { status: 'delivered' });
+      await addDoc(messagesRef, messageData);
 
       setEditorState(EditorState.createEmpty());
-      setFile(null);
-      setAudioURL('');
-      setIsTyping(false);
       setShowEmojiPicker(false);
       setReplyingTo(null);
+    } catch (error) {
+      console.error('Error sending message:', error);
     }
   };
 
@@ -195,17 +178,11 @@ const MessageSystem = () => {
     }
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
-
   const toggleEmojiPicker = () => {
     setShowEmojiPicker((prev) => !prev);
   };
 
-  const handleEmojiClick = useCallback((emojiObject) => {
+  const handleEmojiClick = (emojiObject) => {
     const selection = editorState.getSelection();
     const contentState = editorState.getCurrentContent();
     const newContentState = Modifier.insertText(
@@ -226,7 +203,7 @@ const MessageSystem = () => {
         editorRef.current.focus();
       }
     }, 0);
-  }, [editorState]);
+  };
 
   const addReaction = async (messageId, emoji) => {
     const chatId = [auth.currentUser.uid, selectedUser.id].sort().join('_');
@@ -240,36 +217,6 @@ const MessageSystem = () => {
     const chatId = [auth.currentUser.uid, selectedUser.id].sort().join('_');
     await deleteDoc(doc(db, 'chats', chatId, 'messages', messageId));
     setContextMenu(null);
-  };
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      mediaRecorderRef.current.start();
-
-      const audioChunks = [];
-      mediaRecorderRef.current.addEventListener("dataavailable", event => {
-        audioChunks.push(event.data);
-      });
-
-      mediaRecorderRef.current.addEventListener("stop", () => {
-        const audioBlob = new Blob(audioChunks);
-        const audioUrl = URL.createObjectURL(audioBlob);
-        setAudioURL(audioUrl);
-      });
-
-      setIsRecording(true);
-    } catch (err) {
-      console.error("Error accessing microphone:", err);
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
   };
 
   const handleContextMenu = (event, messageId) => {
@@ -294,10 +241,6 @@ const MessageSystem = () => {
       } catch {
         messageContent = <p className="message-content">{msg.text}</p>;
       }
-    } else if (msg.image) {
-      messageContent = <img src={msg.image} alt="Shared" className="message-image" />;
-    } else if (msg.audio) {
-      messageContent = <audio src={msg.audio} controls className="message-audio" />;
     }
 
     return (
@@ -314,7 +257,7 @@ const MessageSystem = () => {
           )}
           {messageContent}
           <span className="timestamp">
-            {msg.timestamp?.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            {msg.timestamp?.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
             {msg.sender === auth.currentUser.uid && (
               <span className={`message-status ${msg.status}`}>
                 {msg.status === 'sent' && '✓'}
@@ -357,21 +300,19 @@ const MessageSystem = () => {
           {users.map(user => {
             const lastMessage = messages.filter(m => m.sender === user.id || m.sender === auth.currentUser.uid).pop();
             let lastMessageText = 'No messages yet';
-            if (lastMessage) {
-              if (lastMessage.text) {
-                try {
-                  lastMessageText = JSON.parse(lastMessage.text).blocks[0].text;
-                } catch {
-                  lastMessageText = lastMessage.text;
-                }
-              } else if (lastMessage.image) {
-                lastMessageText = 'Image';
-              } else if (lastMessage.audio) {
-                lastMessageText = 'Audio message';
+            if (lastMessage?.text) {
+              try {
+                lastMessageText = JSON.parse(lastMessage.text).blocks[0].text;
+              } catch {
+                lastMessageText = lastMessage.text;
               }
             }
             return (
-              <div key={user.id} onClick={() => setSelectedUser(user)} className={`chat-item ${selectedUser?.id === user.id ? 'active' : ''}`}>
+              <div 
+                key={user.id} 
+                onClick={() => setSelectedUser(user)} 
+                className={`chat-item ${selectedUser?.id === user.id ? 'active' : ''}`}
+              >
                 <div className={`user-avatar ${user.online ? 'online' : 'offline'}`}>
                   {user.username[0].toUpperCase()}
                 </div>
@@ -405,7 +346,9 @@ const MessageSystem = () => {
               {filteredMessages.map(renderMessage)}
               <div ref={messagesEndRef} />
             </div>
-            {isTyping && <div className="typing-indicator">{selectedUser.username} is typing...</div>}
+            {isTyping && (
+              <div className="typing-indicator">{selectedUser.username} is typing...</div>
+            )}
             {replyingTo && (
               <div className="replying-to">
                 <span>Replying to: {replyingTo.text}</span>
@@ -425,21 +368,6 @@ const MessageSystem = () => {
               />
               <div className="input-actions">
                 <button onClick={toggleEmojiPicker} className="emoji-button">😊</button>
-                <input 
-                  type="file" 
-                  onChange={handleFileChange} 
-                  style={{ display: 'none' }} 
-                  id="file-input" 
-                />
-                <label htmlFor="file-input" className="file-input-label">📎</label>
-                {!isRecording ? (
-                  <button onClick={startRecording} className="record-button">🎤</button>
-                ) : (
-                  <button onClick={stopRecording} className="stop-record-button">⏹️</button>
-                )}
-                {audioURL && (
-                  <audio src={audioURL} controls className="audio-preview" />
-                )}
                 <button onClick={sendMessage} className="send-button">Send</button>
               </div>
             </div>

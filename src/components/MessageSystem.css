@@ -457,3 +457,38 @@ body {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+.message-file {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.message-file a {
+  color: var(--primary-color);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.message-file a:hover {
+  text-decoration: underline;
+}
+
+.file-preview {
+  max-width: 100px;
+  max-height: 100px;
+  border-radius: 8px;
+  margin-right: 10px;
+  object-fit: cover;
+}
+
+.send-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
