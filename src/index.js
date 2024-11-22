@@ -1,4 +1,4 @@
-// src/index.js
+//this is our main file// src/index.js
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './App.css';
